@@ -207,6 +207,17 @@
             font-weight: 500;
         }
         
+        .error-message {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1.5rem;
+            display: none;
+            text-align: center;
+            font-weight: 500;
+        }
+        
         .security-note {
             font-size: 0.95rem;
             color: #666;
@@ -235,6 +246,38 @@
             margin-bottom: 0.8rem;
             color: var(--secondary-color);
         }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 1rem;
+        }
+        
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--secondary-color);
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .actions-cell {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .btn-delete {
+            background: linear-gradient(to right, #e74c3c, #c0392b);
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+        }
     </style>
 </head>
 <body>
@@ -246,6 +289,15 @@
         
         <div class="success-message" id="successMessage">
             ¡Contacto agregado exitosamente! Los datos han sido validados y se encuentran protegidos.
+        </div>
+        
+        <div class="error-message" id="errorMessage">
+            Ha ocurrido un error al procesar su solicitud.
+        </div>
+        
+        <div class="loading" id="loadingIndicator">
+            <div class="loading-spinner"></div>
+            <p>Procesando solicitud de forma segura...</p>
         </div>
         
         <div class="app-container">
@@ -289,30 +341,20 @@
             </div>
             
             <div class="contacts-section">
-                <h2>Mis Contactos <span id="contactsCount">(2)</span></h2>
+                <h2>Mis Contactos <span id="contactsCount">(0)</span></h2>
                 <div id="contactsContainer">
-                    <table id="contactsTable">
+                    <div class="no-contacts" id="noContacts">No hay contactos guardados. Agrega tu primer contacto.</div>
+                    <table id="contactsTable" style="display: none;">
                         <thead>
                             <tr>
                                 <th>Nombre</th>
                                 <th>Email</th>
                                 <th>Teléfono</th>
                                 <th>Tipo</th>
+                                <th>Acciones</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            <tr>
-                                <td>Juan Pérez</td>
-                                <td>juan@ejemplo.com</td>
-                                <td>+1234567890</td>
-                                <td>Personal</td>
-                            </tr>
-                            <tr>
-                                <td>María García</td>
-                                <td>maria@empresa.com</td>
-                                <td>+0987654321</td>
-                                <td>Trabajo</td>
-                            </tr>
+                        <tbody id="contactsTableBody">
                         </tbody>
                     </table>
                 </div>
@@ -347,6 +389,92 @@
     </div>
 
     <script>
+        // Simulación de una base de datos segura
+        const secureDatabase = (() => {
+            let contacts = JSON.parse(localStorage.getItem('secureContacts')) || [];
+            let nextId = parseInt(localStorage.getItem('nextContactId')) || 1;
+            
+            return {
+                // Simula una consulta parametrizada a la base de datos
+                addContact: function(contactData) {
+                    return new Promise((resolve, reject) => {
+                        // Simular procesamiento del servidor
+                        setTimeout(() => {
+                            try {
+                                // Validación adicional en el "servidor"
+                                if (!this.isValidContact(contactData)) {
+                                    reject(new Error("Datos de contacto inválidos"));
+                                    return;
+                                }
+                                
+                                const newContact = {
+                                    id: nextId++,
+                                    name: this.sanitizeOutput(contactData.name),
+                                    email: this.sanitizeOutput(contactData.email),
+                                    phone: this.sanitizeOutput(contactData.phone),
+                                    type: this.sanitizeOutput(contactData.type)
+                                };
+                                
+                                contacts.push(newContact);
+                                
+                                // Persistir en "base de datos" (localStorage para esta simulación)
+                                localStorage.setItem('secureContacts', JSON.stringify(contacts));
+                                localStorage.setItem('nextContactId', nextId.toString());
+                                
+                                resolve(newContact);
+                            } catch (error) {
+                                reject(error);
+                            }
+                        }, 1000); // Simular latencia de red
+                    });
+                },
+                
+                getContacts: function() {
+                    return new Promise((resolve) => {
+                        setTimeout(() => {
+                            resolve([...contacts]); // Devolver copia para no modificar el original
+                        }, 500);
+                    });
+                },
+                
+                deleteContact: function(id) {
+                    return new Promise((resolve, reject) => {
+                        setTimeout(() => {
+                            const index = contacts.findIndex(contact => contact.id === id);
+                            if (index === -1) {
+                                reject(new Error("Contacto no encontrado"));
+                                return;
+                            }
+                            
+                            contacts.splice(index, 1);
+                            localStorage.setItem('secureContacts', JSON.stringify(contacts));
+                            resolve(true);
+                        }, 800);
+                    });
+                },
+                
+                // Validación en el servidor
+                isValidContact: function(contact) {
+                    const nameRegex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]{2,50}$/;
+                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    const phoneRegex = /^\+?[0-9]{7,15}$/;
+                    const validTypes = ['Personal', 'Trabajo', 'Familia', 'Emergencia', 'Otro'];
+                    
+                    return nameRegex.test(contact.name) && 
+                           emailRegex.test(contact.email) && 
+                           phoneRegex.test(contact.phone) && 
+                           validTypes.includes(contact.type);
+                },
+                
+                // Sanitizar salida para prevenir XSS
+                sanitizeOutput: function(str) {
+                    const div = document.createElement('div');
+                    div.textContent = str;
+                    return div.innerHTML;
+                }
+            };
+        })();
+
         document.addEventListener('DOMContentLoaded', function() {
             const contactForm = document.getElementById('contactForm');
             const nameInput = document.getElementById('name');
@@ -354,8 +482,12 @@
             const phoneInput = document.getElementById('phone');
             const typeSelect = document.getElementById('type');
             const successMessage = document.getElementById('successMessage');
+            const errorMessage = document.getElementById('errorMessage');
+            const loadingIndicator = document.getElementById('loadingIndicator');
             const contactsCount = document.getElementById('contactsCount');
             const contactsTable = document.getElementById('contactsTable');
+            const contactsTableBody = document.getElementById('contactsTableBody');
+            const noContacts = document.getElementById('noContacts');
             
             // Expresiones regulares para validación
             const nameRegex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]{2,50}$/;
@@ -363,6 +495,9 @@
             const phoneRegex = /^\+?[0-9]{7,15}$/;
             const sqlInjectionPattern = /(\%27)|(\')|(\-\-)|(\%23)|(#)/i;
             const scriptPattern = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi;
+            
+            // Cargar contactos al iniciar
+            loadContacts();
             
             // Función para limpiar entradas de posibles ataques
             function sanitizeInput(input) {
@@ -480,62 +615,142 @@
                 const isTypeValid = validateType();
                 
                 if (isNameValid && isEmailValid && isPhoneValid && isTypeValid) {
-                    // Simular envío seguro al servidor
-                    simulateSecureSubmit();
+                    // Mostrar indicador de carga
+                    loadingIndicator.style.display = 'block';
+                    successMessage.style.display = 'none';
+                    errorMessage.style.display = 'none';
+                    
+                    // Preparar datos para enviar
+                    const contactData = {
+                        name: nameInput.value,
+                        email: emailInput.value,
+                        phone: phoneInput.value,
+                        type: typeSelect.value
+                    };
+                    
+                    // Enviar al "servidor"
+                    secureDatabase.addContact(contactData)
+                        .then(newContact => {
+                            // Éxito
+                            loadingIndicator.style.display = 'none';
+                            successMessage.style.display = 'block';
+                            
+                            // Limpiar el formulario
+                            contactForm.reset();
+                            
+                            // Remover clases de validación
+                            const inputs = contactForm.querySelectorAll('input, select');
+                            inputs.forEach(input => {
+                                input.classList.remove('input-valid', 'input-invalid');
+                            });
+                            
+                            // Actualizar la lista de contactos
+                            loadContacts();
+                            
+                            // Ocultar el mensaje después de 4 segundos
+                            setTimeout(() => {
+                                successMessage.style.display = 'none';
+                            }, 4000);
+                        })
+                        .catch(error => {
+                            // Error
+                            loadingIndicator.style.display = 'none';
+                            errorMessage.textContent = "Error de seguridad: " + error.message;
+                            errorMessage.style.display = 'block';
+                            
+                            console.error("Error del servidor:", error);
+                        });
                 } else {
                     // Mostrar mensaje de error general
-                    alert("Por favor, corrige los errores en el formulario antes de enviar.");
+                    errorMessage.textContent = "Por favor, corrige los errores en el formulario antes de enviar.";
+                    errorMessage.style.display = 'block';
                 }
             });
             
-            // Simular envío seguro al servidor
-            function simulateSecureSubmit() {
-                // Aquí se simularía el envío seguro al servidor
-                // En una aplicación real, se usaría fetch o XMLHttpRequest
-                // con las medidas de seguridad adecuadas
+            // Cargar contactos desde la "base de datos"
+            function loadContacts() {
+                secureDatabase.getContacts()
+                    .then(contacts => {
+                        if (contacts.length === 0) {
+                            noContacts.style.display = 'block';
+                            contactsTable.style.display = 'none';
+                            contactsCount.textContent = '(0)';
+                        } else {
+                            noContacts.style.display = 'none';
+                            contactsTable.style.display = 'table';
+                            contactsCount.textContent = `(${contacts.length})`;
+                            
+                            // Limpiar tabla
+                            contactsTableBody.innerHTML = '';
+                            
+                            // Agregar contactos a la tabla
+                            contacts.forEach(contact => {
+                                const row = document.createElement('tr');
+                                
+                                const nameCell = document.createElement('td');
+                                const emailCell = document.createElement('td');
+                                const phoneCell = document.createElement('td');
+                                const typeCell = document.createElement('td');
+                                const actionsCell = document.createElement('td');
+                                actionsCell.className = 'actions-cell';
+                                
+                                // Usar textContent para prevenir XSS
+                                nameCell.textContent = contact.name;
+                                emailCell.textContent = contact.email;
+                                phoneCell.textContent = contact.phone;
+                                typeCell.textContent = contact.type;
+                                
+                                // Botón de eliminar
+                                const deleteBtn = document.createElement('button');
+                                deleteBtn.textContent = 'Eliminar';
+                                deleteBtn.className = 'btn-delete';
+                                deleteBtn.addEventListener('click', () => {
+                                    if (confirm('¿Estás seguro de que quieres eliminar este contacto?')) {
+                                        deleteContact(contact.id);
+                                    }
+                                });
+                                
+                                actionsCell.appendChild(deleteBtn);
+                                
+                                row.appendChild(nameCell);
+                                row.appendChild(emailCell);
+                                row.appendChild(phoneCell);
+                                row.appendChild(typeCell);
+                                row.appendChild(actionsCell);
+                                
+                                contactsTableBody.appendChild(row);
+                            });
+                        }
+                    })
+                    .catch(error => {
+                        console.error("Error al cargar contactos:", error);
+                        errorMessage.textContent = "Error al cargar los contactos. Por favor, recarga la página.";
+                        errorMessage.style.display = 'block';
+                    });
+            }
+            
+            // Eliminar contacto
+            function deleteContact(id) {
+                loadingIndicator.style.display = 'block';
                 
-                // Mostrar mensaje de éxito
-                successMessage.style.display = 'block';
-                
-                // Agregar el contacto a la tabla (simulación)
-                const tbody = contactsTable.querySelector('tbody');
-                const newRow = document.createElement('tr');
-                
-                const nameCell = document.createElement('td');
-                const emailCell = document.createElement('td');
-                const phoneCell = document.createElement('td');
-                const typeCell = document.createElement('td');
-                
-                // Codificar la salida para prevenir XSS
-                nameCell.textContent = nameInput.value;
-                emailCell.textContent = emailInput.value;
-                phoneCell.textContent = phoneInput.value;
-                typeCell.textContent = typeSelect.value;
-                
-                newRow.appendChild(nameCell);
-                newRow.appendChild(emailCell);
-                newRow.appendChild(phoneCell);
-                newRow.appendChild(typeCell);
-                
-                tbody.appendChild(newRow);
-                
-                // Actualizar contador
-                const currentCount = parseInt(contactsCount.textContent.replace(/[\(\)]/g, ''));
-                contactsCount.textContent = `(${currentCount + 1})`;
-                
-                // Limpiar el formulario
-                contactForm.reset();
-                
-                // Remover clases de validación
-                const inputs = contactForm.querySelectorAll('input, select');
-                inputs.forEach(input => {
-                    input.classList.remove('input-valid', 'input-invalid');
-                });
-                
-                // Ocultar el mensaje después de 4 segundos
-                setTimeout(() => {
-                    successMessage.style.display = 'none';
-                }, 4000);
+                secureDatabase.deleteContact(id)
+                    .then(success => {
+                        loadingIndicator.style.display = 'none';
+                        if (success) {
+                            successMessage.textContent = "Contacto eliminado correctamente.";
+                            successMessage.style.display = 'block';
+                            loadContacts();
+                            
+                            setTimeout(() => {
+                                successMessage.style.display = 'none';
+                            }, 4000);
+                        }
+                    })
+                    .catch(error => {
+                        loadingIndicator.style.display = 'none';
+                        errorMessage.textContent = "Error al eliminar el contacto: " + error.message;
+                        errorMessage.style.display = 'block';
+                    });
             }
             
             // Simular funcionalidad de backend seguro
